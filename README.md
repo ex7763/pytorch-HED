@@ -50,7 +50,7 @@ As mentioned in the paper, Fusion refers to the fusion-output(dsn6) and Merged m
 
 ## How to Run
 ### Prerequisite:
-* Pytorch>=0.3.1
+* Pytorch>=1.7.0
 * Tensorboard
 * [AttrDict](https://github.com/bcj/AttrDict)
 

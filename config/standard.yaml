@@ -4,15 +4,15 @@ MODEL:
     pretrained: True
     loss_balance_weight: True
     loss_weight_list: [1,1,1,1,1,1]
-    upsample_layer: 'github'  # 'deconv' or 'bilinear', 'github'
+    upsample_layer: 'bilinear'  # 'deconv' or 'bilinear', 'github'
     interpolate_mode: 'bilinear'  # 'bilinear' or 'nearest' if upsample_layer=='bilinear'
-    freeze_bn: True  # for batchnorm
-    freeze_bn_affine: True   # for batchnorm
-    init_mode: 'Gaussian'  # 'Gaussian' or 'xavier'
+    freeze_bn: False  # for batchnorm
+    freeze_bn_affine: False   # for batchnorm
+    init_mode: 'xavier'  # 'Gaussian' or 'xavier'
 
     loss_func_logits: True # Default: True
     loss_reduce: True  # Default: True
-    first_pad: 21  # Default: 34
+    first_pad: 34 # Default: 34
     
 TRAIN: 
     init_lr: 0.0001
@@ -39,9 +39,12 @@ SAVE:
     MAT:
         normalize: True # whether divide the max value
 DATA:
-    root: /mnt/lustre/wuchongruo/projects/my_hed_new/data/HED-BSDS 
+    #root: /Users/hpc/NYCU/hed/data/HED-BSDS
+    root: /home/hpc/nctu/hed/data/HED-BSDS
     #mean: [104.00699, 116.66877, 122.67892]
     mean: [122.67892, 116.66877, 104.00699]
+
+    gt_mode: None #gt_half
 
     AUG: 
         ColorJitter: True
@@ -53,8 +56,3 @@ DATA:
     
     train_list: train_pair.lst
     test_list: test.lst
-
-
-
-
-

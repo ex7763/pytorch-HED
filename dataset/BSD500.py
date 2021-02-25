@@ -8,15 +8,13 @@ import random
 
 import pdb
 
-
-
 class BSD500Dataset():
     def __init__(self, cfg):
 
         self.cfg = cfg
         self.rootdir = cfg.DATA.root
         self.train_list = cfg.DATA.train_list  
-        
+
         ### data 
         self.all_path_list = []
         with open('/'.join([self.rootdir, self.train_list]), 'r') as f:
@@ -24,7 +22,7 @@ class BSD500Dataset():
             for line in lines:
                 line = line[:-1]
                 cur_pair = line.split(' ')
-                
+
                 self.all_path_list.append( cur_pair )
         print('in data_loader: Train data preparation done')
 

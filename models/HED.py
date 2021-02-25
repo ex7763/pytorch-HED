@@ -17,6 +17,8 @@ class HED(nn.Module):
         self.cfg = cfg
         self.writer = writer
 
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
         ############################ Model ###################################
         self.first_padding = nn.ReflectionPad2d(self.cfg.MODEL.first_pad)
@@ -25,9 +27,9 @@ class HED(nn.Module):
         backbone_mode = self.cfg.MODEL.backbone
         pretrained = self.cfg.MODEL.pretrained 
         if backbone_mode=='vgg16':
-            vgg16 = models.vgg16(pretrained=pretrained).cuda()
+            vgg16 = models.vgg16(pretrained=pretrained).to(self.device)
         elif self.cfg.MODEL.backbone=='vgg16_bn':
-            vgg16 = models.vgg16_bn(pretrained=pretrained).cuda()
+            vgg16 = models.vgg16_bn(pretrained=pretrained).to(self.device)
 
         self.conv1 = self.extract_layer(vgg16, backbone_mode, 1)
         self.conv2 = self.extract_layer(vgg16, backbone_mode, 2)
@@ -128,7 +130,7 @@ class HED(nn.Module):
             elif self.cfg.MODEL.interpolate_mode=='bilinear':
                 dsn2_up = F.interpolate(dsn2, size=(2*(h2+1), 2*(w2+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
         elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv2 =  self.make_bilinear_weights(4, 1).cuda() 
+            weight_deconv2 =  self.make_bilinear_weights(4, 1).to(self.device) 
             dsn2_up = torch.nn.functional.conv_transpose2d(dsn2, weight_deconv2, stride=2)
         dsn2_final = self.crop_layer(dsn2_up, h, w)
         #dsn2_final_bn = self.dsn2_bn(dsn2_final)
@@ -145,7 +147,7 @@ class HED(nn.Module):
             elif self.cfg.MODEL.interpolate_mode=='bilinear':
                 dsn3_up = F.interpolate(dsn3, size=(4*(h3+1), 4*(w3+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
         elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv3 =  self.make_bilinear_weights(8, 1).cuda() 
+            weight_deconv3 =  self.make_bilinear_weights(8, 1).to(self.device) 
             dsn3_up = torch.nn.functional.conv_transpose2d(dsn3, weight_deconv3, stride=4)
         dsn3_final = self.crop_layer(dsn3_up, h, w)
         #dsn3_final_bn = self.dsn3_bn(dsn3_final)
@@ -163,7 +165,7 @@ class HED(nn.Module):
             elif self.cfg.MODEL.interpolate_mode=='bilinear':
                 dsn4_up = F.interpolate(dsn4, size=(8*(h4+1),8*(w4+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
         elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv4 =  self.make_bilinear_weights(16, 1).cuda() 
+            weight_deconv4 =  self.make_bilinear_weights(16, 1).to(self.device) 
             dsn4_up = torch.nn.functional.conv_transpose2d(dsn4, weight_deconv4, stride=8)
         dsn4_final = self.crop_layer(dsn4_up, h, w)
         #dsn4_final_bn = self.dsn4_bn(dsn4_final)
@@ -180,7 +182,7 @@ class HED(nn.Module):
             elif self.cfg.MODEL.interpolate_mode=='bilinear':
                 dsn5_up = F.interpolate(dsn5, size=(16*(h5+1), 16*(w5+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
         elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv5 =  self.make_bilinear_weights(32, 1).cuda() 
+            weight_deconv5 =  self.make_bilinear_weights(32, 1).to(self.device) 
             dsn5_up = torch.nn.functional.conv_transpose2d(dsn5, weight_deconv5, stride=16)
         dsn5_final = self.crop_layer(dsn5_up, h, w)
         #dsn5_final_bn = self.dsn5_bn(dsn5_final)
@@ -291,17 +293,19 @@ class HED(nn.Module):
         
         #h_start = math.floor( (input_h - ref_h) / 2 )
         #w_start = math.floor( (input_w - ref_w) / 2 )
-        h_start = int(round( (input_h - ref_h) / 2 ))
-        w_start = int(round( (input_w - ref_w) / 2 ))
+        print(input_h, input_w, ref_h, ref_w)
+        if torch.is_tensor(input_h):
+            h_start = int(torch.round( (input_h - ref_h) / 2 ))
+            w_start = int(torch.round( (input_w - ref_w) / 2 ))
+        else:
+            h_start = int(round( (input_h - ref_h) / 2 ))
+            w_start = int(round( (input_w - ref_w) / 2 ))
+
         x_new = x[:, :, h_start:h_start+ref_h, w_start:w_start+ref_w] 
 
         return x_new
 
     
-
-
-
-        
-
-
-
+    def load(self, path):
+        print("load from ", path)
+        self.load_state_dict(torch.load(path, map_location=torch.device("cpu")))

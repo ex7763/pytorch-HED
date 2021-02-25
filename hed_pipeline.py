@@ -19,11 +19,15 @@ import scipy.io
 from datetime import datetime
 import pdb
 
+from tqdm import tqdm
+
 #logger = Logger('./logs')
 
 
 class HEDPipeline():
     def __init__(self, cfg):
+
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.cfg = self.cfg_checker(cfg)
         self.root = '/'.join( ['../ckpt', self.cfg.path.split('.')[0]] )
@@ -38,7 +42,9 @@ class HEDPipeline():
         #self.writer = SummaryWriter()
         
         self.writer.add_text('cfg', str(self.cfg))
-        
+
+        self.mode = self.cfg.mode
+
 
         ######################### Dataset ################################################3
 
@@ -62,7 +68,21 @@ class HEDPipeline():
 
 
         self.model = HED(self.cfg, self.writer) 
-        self.model = self.model.cuda()
+        if self.cfg.mode == "test":
+            self.model.load(os.path.join(self.log_dir, "epoch_7.pth"))
+
+            self.model = torch.jit.load(os.path.join(self.log_dir, "epoch_7.pt"))
+
+            ## change to jit script
+#             with torch.no_grad():
+                # self.model.eval()
+                # traced_cell = torch.jit.trace(self.model, torch.FloatTensor(
+                    # torch.rand([1, 3, 120, 160])))
+            # suffix_latest = 'epoch_7.pt'
+            # model_save_path = os.path.join(self.log_dir, suffix_latest)
+            # torch.jit.save(traced_cell,  model_save_path)
+#             ## end
+        self.model = self.model.to(self.device)
         
         ### loss function
         if self.cfg.MODEL.loss_func_logits:
@@ -145,10 +165,10 @@ class HEDPipeline():
         tic = time.time()
         for cur_epoch in range(self.cfg.TRAIN.nepoch):
             
-            for ind, (data,target) in enumerate(self.data_loader):
+            for ind, (data,target) in tqdm(enumerate(self.data_loader)):
                 cur_iter = cur_epoch * len(self.data_loader) + ind + 1
 
-                data, target = data.cuda(), target.cuda()
+                data, target = data.to(self.device), target.to(self.device)
                 data_time.update(time.time() - tic)
 
                 dsn1, dsn2, dsn3, dsn4, dsn5, dsn6 = self.model( data )  
@@ -235,6 +255,7 @@ class HEDPipeline():
 
                     self.tensorboard_summary(cur_iter) ### show loss and weights
 
+                #break # test save function
                 
 
             ### clean gradient after one epoch
@@ -251,7 +272,15 @@ class HEDPipeline():
                 print('=======> saving model')
                 suffix_latest = 'epoch_{}.pth'.format(cur_epoch)
                 model_save_path = os.path.join(self.log_dir, suffix_latest)
-                torch.save( self.model.state_dict(), model_save_path)
+                torch.save(self.model.state_dict(), model_save_path)
+
+                self.model.eval()
+                with torch.no_grad():
+                    traced_cell = torch.jit.trace(self.model, torch.FloatTensor(
+                        torch.rand([1, 3, 120, 160])))
+                suffix_latest = 'epoch_{}.pt'.format(cur_epoch)
+                model_save_path = os.path.join(self.log_dir, suffix_latest)
+                torch.jit.save(traced_cell,  model_save_path)
                 
         self.writer.close()
 
@@ -368,6 +397,7 @@ class HEDPipeline():
             else:
                 dsn_final = dsn
 
+            print(dsn_final)
             
             dsn_final_np = np.array( dsn_final.detach().cpu().numpy() )
             dsn_final_np = dsn_final_np[0,0,:,:]
@@ -381,18 +411,19 @@ class HEDPipeline():
         for ind, item in enumerate(self.data_test_loader):
             (data, img_filename) = item
             #(data, target) = item
-            data = data.cuda()
+            data = data.to(self.device)
 
             #img_filename = '100075.png'
             print(img_filename)
             dsn1, dsn2, dsn3, dsn4, dsn5, dsn6 = self.model( data )  
 
-            #save_img(dsn1, result_dir, 1)  
-            #save_img(dsn2, result_dir, 2)  
-            #save_img(dsn3, result_dir, 3)  
-            #save_img(dsn4, result_dir, 4)  
-            #save_img(dsn5, result_dir, 5)  
-            #save_img(dsn6, result_dir, 6)  
+            result_dir = "/home/hpc/result/"
+            save_img(dsn1, result_dir, 1)  
+            save_img(dsn2, result_dir, 2)  
+            save_img(dsn3, result_dir, 3)  
+            save_img(dsn4, result_dir, 4)  
+            save_img(dsn5, result_dir, 5)  
+            save_img(dsn6, result_dir, 6)  
 
             #pdb.set_trace()
             input_show = vutils.make_grid(data, normalize=True, scale_each=True)
