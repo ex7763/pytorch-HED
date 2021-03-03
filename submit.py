@@ -3,7 +3,8 @@ import os,pdb,time
 
 #######################################################################################
 ## relative to config
-config_file='standard.yaml'
+config_file='no_norm.yaml'
+#config_file='standard.yaml'
 #cluster=True
 #cluster=False
 #######################################################################################
@@ -45,6 +46,7 @@ if __name__ == '__main__':
 
     time.ctime()
     cur_time = time.strftime('_%b%d_%H-%M-%S') 
+    layers = 3
 
     #######################################################################################
 
@@ -53,7 +55,8 @@ if __name__ == '__main__':
     cmd = '''\
         LOG="''' + ckpt_dir + '/' + '/'.join(dirs) + '/' + filename  + '''-`date +'%Y-%m-%d_%H-%M-%S'`_train" 
         echo $LOG ;
-        python run.py --mode train --cfg ''' +  config_file + ''' --time ''' + cur_time + '''$2>&1 | tee ${LOG}
     '''
+    cmd2 = f'python run.py --mode train --layers {layers} --cfg {config_file} --time {cur_time} $2>&1 | tee ${{LOG}}'
+    print(cmd2)
 
-    os.system(cmd)
+    os.system(cmd + cmd2)

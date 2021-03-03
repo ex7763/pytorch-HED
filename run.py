@@ -4,7 +4,6 @@ import argparse
 import random
 import numpy
 
-from hed_pipeline import *
 from attrdict import AttrDict
 
 if __name__ == '__main__':
@@ -15,6 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', dest='cfg', required=True, help='path to config file')
     parser.add_argument('--mode', dest='mode', required=True, help='path to config file')
     parser.add_argument('--time', dest='time', required=True, help='path to config file')
+    parser.add_argument('--layers', dest='layers', required=False, default=5, type=int, help='path to config file')
     args = parser.parse_args()
 
     #print(args)
@@ -40,6 +40,14 @@ if __name__ == '__main__':
 
 
     ########################################
+    print("args.layers: ", args.layers)
+    if args.layers == 3:
+        from hed3_pipeline import *
+        print("HED layers: 3")
+    else:
+        from hed_pipeline import *
+        print("HED layers: 5")
+
 
     hed_pipeline = HEDPipeline(cfg)
 

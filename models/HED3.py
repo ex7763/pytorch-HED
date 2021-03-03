@@ -33,41 +33,33 @@ class HED(nn.Module):
         self.conv1 = self.extract_layer(vgg16, backbone_mode, 1)
         self.conv2 = self.extract_layer(vgg16, backbone_mode, 2)
         self.conv3 = self.extract_layer(vgg16, backbone_mode, 3)
-        self.conv4 = self.extract_layer(vgg16, backbone_mode, 4)
-        self.conv5 = self.extract_layer(vgg16, backbone_mode, 5)
 
-        print(self.conv5)
+        print(self.conv3)
         
 
         ### other layers
         self.dsn1 = nn.Conv2d(64, 1, 1)
         self.dsn2 = nn.Conv2d(128, 1, 1)
         self.dsn3 = nn.Conv2d(256, 1, 1)
-        self.dsn4 = nn.Conv2d(512, 1, 1)
-        self.dsn5 = nn.Conv2d(512, 1, 1)
-        self.new_score_weighting = nn.Conv2d(5, 1, 1)
+        self.new_score_weighting = nn.Conv2d(3, 1, 1)
 
         self.dsn1_bn = nn.BatchNorm2d(1)
         self.dsn2_bn = nn.BatchNorm2d(1)
         self.dsn3_bn = nn.BatchNorm2d(1)
-        self.dsn4_bn = nn.BatchNorm2d(1)
-        self.dsn5_bn = nn.BatchNorm2d(1)
 
         if self.cfg.MODEL.upsample_layer == 'deconv':
             self.dsn2_up = nn.ConvTranspose2d(1, 1, 4, stride=2)
             self.dsn3_up = nn.ConvTranspose2d(1, 1, 8, stride=4)
-            self.dsn4_up = nn.ConvTranspose2d(1, 1, 16, stride=8)
-            self.dsn5_up = nn.ConvTranspose2d(1, 1, 32, stride=16)
         
         #self.other_layers = [self.dsn1, self.dsn2, self.dsn3, self.dsn4, self.dsn5, 
         #                       self.nInitialization ew_score_weighting ]
-        self.other_layers = [self.dsn1, self.dsn2, self.dsn3, self.dsn4, self.dsn5 ]
+        self.other_layers = [self.dsn1, self.dsn2, self.dsn3]
 
         if self.cfg.MODEL.upsample_layer == 'deconv':
-            self.other_layers += [ self.dsn2_up, self.dsn3_up, self.dsn4_up, self.dsn5_up ]
+            self.other_layers += [ self.dsn2_up, self.dsn3_up, ]
         
         if not self.cfg.MODEL.pretrained:
-            self.other_layers += [ self.conv1, self.conv2, self.conv3, self.conv4, self.conv5 ]
+            self.other_layers += [ self.conv1, self.conv2, self.conv3 ]
 
 
         ############################ Layer Initialization ###################################
@@ -107,8 +99,6 @@ class HED(nn.Module):
         self.conv1_output = self.conv1(x)
         self.conv2_output = self.conv2(self.conv1_output)
         self.conv3_output = self.conv3(self.conv2_output)
-        self.conv4_output = self.conv4(self.conv3_output)
-        self.conv5_output = self.conv5(self.conv4_output)
 
         
         ############################# Side Connection
@@ -153,45 +143,10 @@ class HED(nn.Module):
         #dsn4_final_bn = self.dsn4_bn(dsn4_final)
         #print('dsn3 ', dsn3_final.shape)
 
-        ### dsn4
-        dsn4 = self.dsn4(self.conv4_output)
-        if self.cfg.MODEL.upsample_layer == 'deconv':
-            dsn4_up = self.dsn4_up(dsn4)
-        elif self.cfg.MODEL.upsample_layer == 'bilinear':
-            h4,w4 = dsn4.shape[2:]
-            if self.cfg.MODEL.interpolate_mode=='nearest':
-                dsn4_up = F.interpolate(dsn4, size=(8*(h4+1),8*(w4+1)), mode=self.cfg.MODEL.interpolate_mode)
-            elif self.cfg.MODEL.interpolate_mode=='bilinear':
-                dsn4_up = F.interpolate(dsn4, size=(8*(h4+1),8*(w4+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
-        elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv4 =  self.make_bilinear_weights(16, 1).to(self.device) 
-            dsn4_up = torch.nn.functional.conv_transpose2d(dsn4, weight_deconv4, stride=8)
-        dsn4_final = self.crop_layer(dsn4_up, h, w)
-        #dsn4_final_bn = self.dsn4_bn(dsn4_final)
-        #print('dsn4 ', dsn4_final.shape)
-
-        ### dsn5
-        dsn5 = self.dsn5(self.conv5_output)
-        if self.cfg.MODEL.upsample_layer == 'deconv':
-            dsn5_up = self.dsn5_up(dsn5)
-        elif self.cfg.MODEL.upsample_layer == 'bilinear':
-            h5,w5 = dsn5.shape[2:]
-            if self.cfg.MODEL.interpolate_mode=='nearest':
-                dsn5_up = F.interpolate(dsn5, size=(16*(h5+1), 16*(w5+1)), mode=self.cfg.MODEL.interpolate_mode)
-            elif self.cfg.MODEL.interpolate_mode=='bilinear':
-                dsn5_up = F.interpolate(dsn5, size=(16*(h5+1), 16*(w5+1)), mode=self.cfg.MODEL.interpolate_mode, align_corners=True)
-        elif self.cfg.MODEL.upsample_layer == 'github':
-            weight_deconv5 =  self.make_bilinear_weights(32, 1).to(self.device) 
-            dsn5_up = torch.nn.functional.conv_transpose2d(dsn5, weight_deconv5, stride=16)
-        dsn5_final = self.crop_layer(dsn5_up, h, w)
-        #dsn5_final_bn = self.dsn5_bn(dsn5_final)
-        #print('dsn5 ', dsn5_final.shape)
-
-        concat = torch.cat( (dsn1_final, dsn2_final, dsn3_final, dsn4_final, dsn5_final), 1 )
-        #concat = torch.cat( (dsn1_final_bn, dsn2_final_bn, dsn3_final_bn, dsn4_final_bn, dsn5_final_bn), 1 )
-        dsn6_final = self.new_score_weighting( concat )
+        concat = torch.cat( (dsn1_final, dsn2_final, dsn3_final), 1 )
+        dsn4_final = self.new_score_weighting( concat )
         
-        return dsn1_final, dsn2_final, dsn3_final, dsn4_final, dsn5_final, dsn6_final
+        return dsn1_final, dsn2_final, dsn3_final, dsn4_final
 
 
     def train(self, mode=True):
@@ -200,7 +155,7 @@ class HED(nn.Module):
         """
         super(HED, self).train(mode)
 
-        contain_bn_layers = [self.conv1, self.conv2, self.conv3, self.conv4, self.conv5]
+        contain_bn_layers = [self.conv1, self.conv2, self.conv3]
 
         if self.cfg.MODEL.freeze_bn:
             print("----Freezing Mean/Var of BatchNorm2D.")
@@ -248,16 +203,12 @@ class HED(nn.Module):
             index_dict = {
                 1: (0,4), 
                 2: (4,9), 
-                3: (9,16), 
-                4: (16,23),
-                5: (23,30) }
+                3: (9,16) }
         elif backbone_mode=='vgg16_bn':
             index_dict = {
                 1: (0,6), 
                 2: (6,13), 
-                3: (13,23), 
-                4: (23,33),
-                5: (33,43) }
+                3: (13,23) }
 
         start, end = index_dict[ind]
         modified_model = nn.Sequential(*list(model.features.children())[start:end])

@@ -5,7 +5,7 @@ from fastprogress import master_bar, progress_bar
 import numpy as np
 import time
 from dataset.BSD500 import *
-from models.HED import HED
+from models.HED3 import HED
 import torch.nn as nn
 import torch.nn.functional as F
 from utils import AverageMeter
@@ -68,6 +68,7 @@ class HEDPipeline():
 
 
         self.model = HED(self.cfg) 
+        print(self.model)
         if self.cfg.mode == "test":
             self.model.load(os.path.join(self.log_dir, "epoch_7.pth"))
 
@@ -98,15 +99,11 @@ class HEDPipeline():
         
         if self.cfg.TRAIN.update_method=='SGD':
             params_lr_1 = list(self.model.conv1.parameters())  \
-                            + list(self.model.conv2.parameters())  \
-                            + list(self.model.conv3.parameters())  \
-                            + list(self.model.conv4.parameters())
-            params_lr_100 = self.model.conv5.parameters()
+                            + list(self.model.conv2.parameters()) 
+            params_lr_100 = self.model.conv3.parameters()
             params_lr_001 = list(self.model.dsn1.parameters())  \
                             + list(self.model.dsn2.parameters())  \
-                            + list(self.model.dsn3.parameters())  \
-                            + list(self.model.dsn4.parameters())  \
-                            + list(self.model.dsn5.parameters()) 
+                            + list(self.model.dsn3.parameters())
             params_lr_0001 = self.model.new_score_weighting.parameters()
 
 
@@ -123,15 +120,11 @@ class HEDPipeline():
 
         elif self.cfg.TRAIN.update_method=='Adam_paper':
             params_lr_1 = list(self.model.conv1.parameters())  \
-                            + list(self.model.conv2.parameters())  \
-                            + list(self.model.conv3.parameters())  \
-                            + list(self.model.conv4.parameters())
-            params_lr_100 = self.model.conv5.parameters()
+                            + list(self.model.conv2.parameters())
+            params_lr_100 = self.model.conv3.parameters()
             params_lr_001 = list(self.model.dsn1.parameters())  \
                             + list(self.model.dsn2.parameters())  \
-                            + list(self.model.dsn3.parameters())  \
-                            + list(self.model.dsn4.parameters())  \
-                            + list(self.model.dsn5.parameters()) 
+                            + list(self.model.dsn3.parameters()) 
             params_lr_0001 = self.model.new_score_weighting.parameters()
 
 
@@ -171,15 +164,13 @@ class HEDPipeline():
                 data, target = data.to(self.device), target.to(self.device)
                 data_time.update(time.time() - tic)
 
-                dsn1, dsn2, dsn3, dsn4, dsn5, dsn6 = self.model( data )  
+                dsn1, dsn2, dsn3, dsn4 = self.model( data )  
 
                 if not self.cfg.MODEL.loss_func_logits:
                     dsn1 = torch.sigmoid(dsn1)
                     dsn2 = torch.sigmoid(dsn2)
                     dsn3 = torch.sigmoid(dsn3)
                     dsn4 = torch.sigmoid(dsn4)
-                    dsn5 = torch.sigmoid(dsn5)
-                    dsn6 = torch.sigmoid(dsn6)
                 
                 
                 ############################## Compute Loss ########################################
@@ -194,13 +185,10 @@ class HEDPipeline():
                 self.loss2 = self.loss_function(dsn2.float(), target.float(), weight=cur_weight, reduce=cur_reduce)
                 self.loss3 = self.loss_function(dsn3.float(), target.float(), weight=cur_weight, reduce=cur_reduce)
                 self.loss4 = self.loss_function(dsn4.float(), target.float(), weight=cur_weight, reduce=cur_reduce)
-                self.loss5 = self.loss_function(dsn5.float(), target.float(), weight=cur_weight, reduce=cur_reduce)
-                self.loss6 = self.loss_function(dsn6.float(), target.float(), weight=cur_weight, reduce=cur_reduce)
-
 
                 loss_weight_list = self.cfg.MODEL.loss_weight_list
-                assert( len(loss_weight_list)==6, "len(loss_weight) should be 6" )
-                loss = [ self.loss1, self.loss2, self.loss3, self.loss4, self.loss5, self.loss6]
+                assert( len(loss_weight_list)==4, "len(loss_weight) should be 4" )
+                loss = [ self.loss1, self.loss2, self.loss3, self.loss4]
                 #self.final_loss += sum( [x*y for x,y in zip(loss_weight_list, loss)] ) 
                 self.loss = sum( [x*y for x,y in zip(loss_weight_list, loss)] ) 
                 self.loss = self.loss / self.cfg.TRAIN.update_iter
@@ -237,10 +225,10 @@ class HEDPipeline():
                 if ((ind+1) % self.cfg.TRAIN.disp_iter)==0:
                     print_str  = 'Epoch: [{}][{}/{}], Time: {:.2f}, Data: {:.2f}, lr: {:.11f}, \n \
                                   final_loss: {:.6f}, loss1:{:.6f}, loss2:{:.6f}, loss3:{:.6f}, \
-                                  loss4:{:.6f}, loss5:{:.6f}, loss6:{:.6f}\n '.format(cur_epoch, ind, \
+                                  loss4:{:.6f}\n '.format(cur_epoch, ind, \
                                   len(self.data_loader), batch_time.average(), data_time.average(), \
                                   self.cur_lr, self.final_loss_show, self.loss1, self.loss2,  \
-                                  self.loss3, self.loss4, self.loss5, self.loss6)
+                                  self.loss3, self.loss4)
 
                     print(print_str)
 
@@ -249,13 +237,11 @@ class HEDPipeline():
                     self.writer.add_scalar('loss/loss2', self.loss2.item(), cur_iter)
                     self.writer.add_scalar('loss/loss3', self.loss3.item(), cur_iter)
                     self.writer.add_scalar('loss/loss4', self.loss4.item(), cur_iter)
-                    self.writer.add_scalar('loss/loss5', self.loss5.item(), cur_iter)
-                    self.writer.add_scalar('loss/loss6', self.loss6.item(), cur_iter)
                     self.writer.add_scalar('final_loss', self.final_loss_show.item(), cur_iter)
 
                     self.tensorboard_summary(cur_iter) ### show loss and weights
 
-                #break # test save function
+                # break # test save function
                 
 
             ### clean gradient after one epoch
@@ -278,7 +264,7 @@ class HEDPipeline():
                 with torch.no_grad():
                     traced_cell = torch.jit.trace(self.model, torch.FloatTensor(
                         torch.rand([1, 3, 120, 160])).to(self.device))
-                suffix_latest = 'epoch_{}.pt'.format(cur_epoch)
+                suffix_latest = 'epoch_{}.jit'.format(cur_epoch)
                 model_save_path = os.path.join(self.log_dir, suffix_latest)
                 torch.jit.save(traced_cell,  model_save_path)
                 
@@ -300,17 +286,6 @@ class HEDPipeline():
         print(self.model.new_score_weighting.weight.grad)
         print(self.model.new_score_weighting.bias.grad)
         #pdb.set_trace()
-
-
-        ######## conv5
-        conv5_index = -3 if self.cfg.MODEL.backbone=='vgg16_bn' else -2
-        self.writer.add_histogram('conv5/a_weight: ', self.model.conv5[conv5_index].weight.clone().cpu().data.numpy(), cur_epoch)
-        self.writer.add_histogram('conv5/a_bias: ', self.model.conv5[conv5_index].bias.clone().cpu().data.numpy(), cur_epoch)
-        self.writer.add_histogram('conv5/b_weight_grad: ', self.model.conv5[conv5_index].weight.grad.clone().cpu().data.numpy(), cur_epoch)
-
-        self.writer.add_histogram('conv5/b_bias_grad: ', self.model.conv5[conv5_index].bias.grad.clone().cpu().data.numpy(), cur_epoch)
-        self.writer.add_histogram('conv5/c_output: ', self.model.conv5_output.clone().cpu().data.numpy(), cur_epoch)
-
 
 
     def edge_weight(self, target):
@@ -415,15 +390,13 @@ class HEDPipeline():
 
             #img_filename = '100075.png'
             print(img_filename)
-            dsn1, dsn2, dsn3, dsn4, dsn5, dsn6 = self.model( data )  
+            dsn1, dsn2, dsn3, dsn4 = self.model( data )  
 
             result_dir = "/home/hpc/result/"
             save_img(dsn1, result_dir, 1)  
             save_img(dsn2, result_dir, 2)  
             save_img(dsn3, result_dir, 3)  
             save_img(dsn4, result_dir, 4)  
-            save_img(dsn5, result_dir, 5)  
-            save_img(dsn6, result_dir, 6)  
 
             #pdb.set_trace()
             input_show = vutils.make_grid(data, normalize=True, scale_each=True)
@@ -432,11 +405,9 @@ class HEDPipeline():
                 dsn2 = torch.sigmoid(dsn2)
                 dsn3 = torch.sigmoid(dsn3)
                 dsn4 = torch.sigmoid(dsn4)
-                dsn5 = torch.sigmoid(dsn5)
-                dsn6 = torch.sigmoid(dsn6)
             
-            dsn7 = (dsn1 + dsn2 + dsn3 + dsn4 + dsn5) / 5.0
-            results = [dsn1, dsn2, dsn3, dsn4, dsn5, dsn6, dsn7]
+            dsn4 = (dsn1 + dsn2 + dsn3) / 3.0
+            results = [dsn1, dsn2, dsn3, dsn4]
             self.save_mat(results, img_filename,  cur_epoch) 
             
 
@@ -444,18 +415,14 @@ class HEDPipeline():
             dsn2_show = vutils.make_grid(dsn2.data, normalize=True, scale_each=True)
             dsn3_show = vutils.make_grid(dsn3.data, normalize=True, scale_each=True)
             dsn4_show = vutils.make_grid(dsn4.data, normalize=True, scale_each=True)
-            dsn5_show = vutils.make_grid(dsn5.data, normalize=True, scale_each=True)
-            dsn6_show = vutils.make_grid(dsn6.data, normalize=False, scale_each=True)
             #target_show = vutils.make_grid(target.data, normalize=True, scale_each=True)
 
             self.writer.add_image(img_filename[0]+'/aa_input', input_show, cur_epoch)
-            self.writer.add_image(img_filename[0]+'/ab_dsn6', dsn6_show, cur_epoch)
             #self.writer.add_image(img_filename[0]+'/ac_target', target_show, cur_epoch)
             self.writer.add_image(img_filename[0]+'/dsn1', dsn1_show, cur_epoch)
             self.writer.add_image(img_filename[0]+'/dsn2', dsn2_show, cur_epoch)
             self.writer.add_image(img_filename[0]+'/dsn3', dsn3_show, cur_epoch)
             self.writer.add_image(img_filename[0]+'/dsn4', dsn4_show, cur_epoch)
-            self.writer.add_image(img_filename[0]+'/dsn5', dsn5_show, cur_epoch)
 
 
             #self.writer.a'dd_image(img_filename[0]+'/input', x_show, cur_epoch)
